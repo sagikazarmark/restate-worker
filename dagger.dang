@@ -1,0 +1,53 @@
+type RestateWorker {
+  let source: Directory! @defaultPath(path: "/") @ignorePatterns(patterns: [
+      "*"
+      "!src"
+      "!Cargo.*"
+    ])
+
+    let container(): Container! {
+      Dagger.container.from("rust")
+        .withMountedCache("/root/.cargo/registry", cacheVolume("cargo-registry"))
+        .withMountedCache("/root/.cargo/git", cacheVolume("cargo-git"))
+        .withExec(["rustup", "component", "add", "clippy"])
+        .withExec(["cargo", "install", "cargo-chef", "--locked"])
+        .withWorkdir("/work")
+    }
+
+    let recipe(): File! {
+      container
+        .withMountedDirectory(".", source)
+        .withExec(["cargo", "chef", "prepare", "--recipe-path", "recipe.json"])
+        .file("recipe.json")
+    }
+
+    let cooked(release: Boolean! = false): Container! {
+      let args = ["cargo", "chef", "cook", "--recipe-path", "recipe.json"]
+
+      if (release) {
+        args += ["--release"]
+      }
+
+      container
+        .withMountedFile("recipe.json", recipe)
+        .withExec(args)
+        .withMountedDirectory(".", source)
+        .withMountedCache("target", cacheVolume("cargo-target"))
+    }
+
+    pub build(): Container! @check {
+      cooked.withExec(["cargo", "build"])
+    }
+
+    pub test(): Container! @check {
+      cooked.withExec(["cargo", "test"])
+    }
+
+    pub check(): Container! @check {
+      cooked.withExec(["cargo", "check"])
+    }
+
+    pub clippy(): Container! @check {
+      cooked.withExec(["cargo", "clippy"])
+    }
+}
