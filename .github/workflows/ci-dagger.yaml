@@ -28,3 +28,4 @@ jobs:
           version: ${{ env.DAGGER_VERSION }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          _EXPERIMENTAL_DAGGER_CACHE_CONFIG: "type=gha,mode=max"
