@@ -20,12 +20,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Check
+      - name: Set up Dagger
         uses: dagger/dagger-for-github@d913e70051faf3b907d4dd96ef1161083c88c644 # v8.2.0
         with:
-          verb: check
-          args: " " # Needed for the action to work correctly
           version: ${{ env.DAGGER_VERSION }}
+
+      - name: Check
+        run: dagger check
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           _EXPERIMENTAL_DAGGER_CACHE_CONFIG: "type=gha,mode=max"
