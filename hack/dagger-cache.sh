@@ -157,34 +157,34 @@ restore_cache() {
 
     mkdir -p "${CACHE_DIR}"
 
-    local remote
-    remote=$(rclone_remote "${CACHE_KEY}")
-
-    log "Restoring cache from ${CACHE_BACKEND}://${CACHE_BUCKET}/${CACHE_KEY}/..."
+    log "Restoring cache from ${CACHE_BACKEND}://${CACHE_BUCKET}/..."
     local start_time=$SECONDS
 
-    # Try primary key
-    if rclone sync "${RCLONE_FLAGS[@]}" "${remote}" "${CACHE_DIR}/" 2>&1; then
-        local size
-        size=$(du -sh "${CACHE_DIR}" 2>/dev/null | awk '{print $1}' || echo "unknown")
-        local elapsed=$(( SECONDS - start_time ))
-        log "Cache restored: ${size} in ${elapsed}s"
-        return 0
-    fi
-
-    # Try fallback key
+    # Try primary key, then fallback
+    local keys=("${CACHE_KEY}")
     if [[ -n "${CACHE_FALLBACK_KEY}" ]]; then
-        log "Primary cache miss, trying fallback: ${CACHE_FALLBACK_KEY}"
-        remote=$(rclone_remote "${CACHE_FALLBACK_KEY}")
-
-        if rclone sync "${RCLONE_FLAGS[@]}" "${remote}" "${CACHE_DIR}/" 2>&1; then
-            local size
-            size=$(du -sh "${CACHE_DIR}" 2>/dev/null | awk '{print $1}' || echo "unknown")
-            local elapsed=$(( SECONDS - start_time ))
-            log "Fallback cache restored: ${size} in ${elapsed}s"
-            return 0
-        fi
+        keys+=("${CACHE_FALLBACK_KEY}")
     fi
+
+    for key in "${keys[@]}"; do
+        local remote
+        remote=$(rclone_remote "${key}")
+
+        # Check if remote path has any content before attempting sync
+        if rclone lsf "${RCLONE_FLAGS[@]}" --max-depth 1 "${remote}" >/dev/null 2>&1; then
+            log "Found cache at key: ${key}"
+            if rclone sync "${RCLONE_FLAGS[@]}" "${remote}" "${CACHE_DIR}/" 2>&1; then
+                local size
+                size=$(du -sh "${CACHE_DIR}" 2>/dev/null | awk '{print $1}' || echo "unknown")
+                local elapsed=$(( SECONDS - start_time ))
+                log "Cache restored: ${size} in ${elapsed}s"
+                return 0
+            fi
+            log "WARNING: Cache sync failed for key: ${key}"
+        else
+            log "No cache found at key: ${key}"
+        fi
+    done
 
     log "No existing cache found, starting fresh"
     return 0
