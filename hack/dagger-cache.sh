@@ -250,10 +250,6 @@ save_cache() {
     log "Stopping engine for clean shutdown..."
     docker stop "${ENGINE_NAME}" --timeout 30 2>/dev/null || true
 
-    # Fix ownership of cache files (engine runs as root inside Docker)
-    log "Fixing cache file permissions..."
-    sudo chown -R "$(id -u):$(id -g)" "${CACHE_DIR}" 2>/dev/null || true
-
     local remote
     remote=$(rclone_remote "${CACHE_KEY}")
 
@@ -262,10 +258,13 @@ save_cache() {
 
     # Check cache size
     local size
-    size=$(du -sh "${CACHE_DIR}" 2>/dev/null | awk '{print $1}' || echo "unknown")
+    size=$(sudo du -sh "${CACHE_DIR}" 2>/dev/null | awk '{print $1}' || echo "unknown")
     log "Cache size: ${size}"
 
-    if rclone sync "${RCLONE_FLAGS[@]}" "${CACHE_DIR}/" "${remote}" 2>&1; then
+    # Use sudo because engine files are owned by root with restrictive permissions.
+    # Preserve AWS credentials so rclone can authenticate.
+    if sudo --preserve-env=AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY \
+        rclone sync "${RCLONE_FLAGS[@]}" "${CACHE_DIR}/" "${remote}" 2>&1; then
         local elapsed=$(( SECONDS - start_time ))
         log "Cache saved in ${elapsed}s"
     else
