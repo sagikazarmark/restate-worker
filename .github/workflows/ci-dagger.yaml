@@ -30,3 +30,25 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           _EXPERIMENTAL_DAGGER_CACHE_CONFIG: "type=gha,url_v2=${{ env.ACTIONS_RESULTS_URL }},token=${{ env.ACTIONS_RUNTIME_TOKEN }},scope=dagger"
+
+      - name: Export Dagger Engine Logs
+        if: always()
+        run: |
+          # Find the engine container (auto-provisioned name varies)
+          ENGINE=$(docker ps -a --filter "name=dagger-engine" --format '{{.Names}}' | head -1)
+
+          # Grab the container logs (stdout/stderr from the engine process)
+          docker logs "$ENGINE" > dagger-engine.log 2>&1 || true
+
+          # Also grab the buildkitd debug logs from inside the container
+          docker cp "$ENGINE":/var/log/engine/ ./engine-logs/ 2>/dev/null || true
+
+      - name: Upload Dagger Engine Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dagger-engine-logs
+          path: |
+            dagger-engine.log
+            engine-logs/
+          retention-days: 5
