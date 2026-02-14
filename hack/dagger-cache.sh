@@ -78,6 +78,7 @@ setup_rclone_config() {
 [cache]
 type = s3
 provider = Other
+env_auth = true
 region = ${CACHE_REGION}
 $([ -n "${CACHE_ENDPOINT}" ] && echo "endpoint = ${CACHE_ENDPOINT}")
 EOF
@@ -99,8 +100,10 @@ EOF
 [cache]
 type = s3
 provider = Cloudflare
+env_auth = true
 endpoint = ${CACHE_ENDPOINT:?Set DAGGER_CACHE_ENDPOINT for R2}
 region = auto
+no_check_bucket = true
 EOF
             ;;
         *)
