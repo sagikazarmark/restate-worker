@@ -49,6 +49,9 @@ if [[ -z "${DAGGER_VERSION:-}" ]]; then
     DAGGER_VERSION=$(dagger version 2>/dev/null | head -1 | awk '{print $2}' || echo "v0.19.11")
 fi
 
+# Ensure version has v prefix (engine image tags require it)
+DAGGER_VERSION="v${DAGGER_VERSION#v}"
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────────────────────────────────────────────
@@ -93,28 +96,28 @@ rclone_remote() {
     echo "${remote}"
 }
 
-# Common rclone flags
-rclone_flags() {
-    local flags=(
+# Common rclone flags (populated as a global array)
+RCLONE_FLAGS=()
+setup_rclone_flags() {
+    RCLONE_FLAGS=(
         --fast-list
         --transfers 16
         --checkers 32
         --stats-one-line
         --stats 10s
-        --exclude "executor/**"
-        --exclude "*.tmp"
-        --exclude "*.lock"
-        --exclude "runc-overlayfs/**"
+        --exclude 'executor/**'
+        --exclude '*.tmp'
+        --exclude '*.lock'
+        --exclude 'runc-overlayfs/**'
     )
 
     if [[ "${CACHE_VERBOSE}" == "true" ]]; then
-        flags+=(--verbose)
+        RCLONE_FLAGS+=(--verbose)
     else
-        flags+=(--quiet)
+        RCLONE_FLAGS+=(--quiet)
     fi
-
-    echo "${flags[@]}"
 }
+setup_rclone_flags
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Phase 1: Restore cache
@@ -130,14 +133,12 @@ restore_cache() {
 
     local remote
     remote=$(rclone_remote "${CACHE_KEY}")
-    local flags
-    flags=$(rclone_flags)
 
     log "Restoring cache from ${CACHE_BACKEND}://${CACHE_BUCKET}/${CACHE_KEY}/..."
     local start_time=$SECONDS
 
     # Try primary key
-    if rclone sync ${flags} "${remote}" "${CACHE_DIR}/" 2>&1; then
+    if rclone sync "${RCLONE_FLAGS[@]}" "${remote}" "${CACHE_DIR}/" 2>&1; then
         local size
         size=$(du -sh "${CACHE_DIR}" 2>/dev/null | awk '{print $1}' || echo "unknown")
         local elapsed=$(( SECONDS - start_time ))
@@ -150,7 +151,7 @@ restore_cache() {
         log "Primary cache miss, trying fallback: ${CACHE_FALLBACK_KEY}"
         remote=$(rclone_remote "${CACHE_FALLBACK_KEY}")
 
-        if rclone sync ${flags} "${remote}" "${CACHE_DIR}/" 2>&1; then
+        if rclone sync "${RCLONE_FLAGS[@]}" "${remote}" "${CACHE_DIR}/" 2>&1; then
             local size
             size=$(du -sh "${CACHE_DIR}" 2>/dev/null | awk '{print $1}' || echo "unknown")
             local elapsed=$(( SECONDS - start_time ))
@@ -233,8 +234,6 @@ save_cache() {
 
     local remote
     remote=$(rclone_remote "${CACHE_KEY}")
-    local flags
-    flags=$(rclone_flags)
 
     log "Saving cache to ${CACHE_BACKEND}://${CACHE_BUCKET}/${CACHE_KEY}/..."
     local start_time=$SECONDS
@@ -244,7 +243,7 @@ save_cache() {
     size=$(du -sh "${CACHE_DIR}" 2>/dev/null | awk '{print $1}' || echo "unknown")
     log "Cache size: ${size}"
 
-    if rclone sync ${flags} "${CACHE_DIR}/" "${remote}" 2>&1; then
+    if rclone sync "${RCLONE_FLAGS[@]}" "${CACHE_DIR}/" "${remote}" 2>&1; then
         local elapsed=$(( SECONDS - start_time ))
         log "Cache saved in ${elapsed}s"
     else
