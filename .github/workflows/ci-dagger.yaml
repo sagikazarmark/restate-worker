@@ -20,12 +20,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Check
+      - name: Install Dagger CLI
         uses: dagger/dagger-for-github@d913e70051faf3b907d4dd96ef1161083c88c644 # v8.2.0
         with:
-          verb: check
-          args: " " # Needed for the action to work correctly
+          install-only: true
           version: ${{ env.DAGGER_VERSION }}
+
+      - name: Install rclone
+        run: curl -fsSL https://rclone.org/install.sh | sudo bash
+
+      - name: Check
+        run: ./hack/dagger-cache.sh run check
         env:
+          DAGGER_CACHE_BUCKET: ${{ secrets.DAGGER_CACHE_BUCKET }}
+          DAGGER_CACHE_KEY: ${{ github.repository }}/${{ github.ref_name }}
+          DAGGER_CACHE_FALLBACK_KEY: ${{ github.repository }}/main
+          DAGGER_CACHE_ENDPOINT: ${{ secrets.DAGGER_CACHE_ENDPOINT }}
+          DAGGER_CACHE_REGION: ${{ secrets.DAGGER_CACHE_REGION }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.DAGGER_CACHE_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DAGGER_CACHE_AWS_SECRET_ACCESS_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          _EXPERIMENTAL_DAGGER_CACHE_CONFIG: "type=gha,mode=max"
