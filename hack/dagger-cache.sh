@@ -63,43 +63,64 @@ die() { log "ERROR: $*"; exit 1; }
 cleanup() {
     log "Cleaning up engine container..."
     docker rm -f "${ENGINE_NAME}" 2>/dev/null || true
+    rm -f "${RCLONE_CONFIG_FILE}" 2>/dev/null || true
 }
 
-# Build rclone remote path
-rclone_remote() {
-    local key="$1"
-    local remote=""
+# Set up rclone config file to avoid inline config parsing issues
+# (inline `:s3,...:bucket` breaks when endpoint URLs contain colons)
+RCLONE_CONFIG_FILE=""
+setup_rclone_config() {
+    RCLONE_CONFIG_FILE=$(mktemp /tmp/rclone-dagger-XXXXXX.conf)
 
     case "${CACHE_BACKEND}" in
         s3)
-            if [[ -n "${CACHE_ENDPOINT}" ]]; then
-                # For custom S3 endpoints, configure inline
-                remote=":s3,provider=Other,endpoint=${CACHE_ENDPOINT},region=${CACHE_REGION}:${CACHE_BUCKET}/${key}/"
-            else
-                remote=":s3,region=${CACHE_REGION}:${CACHE_BUCKET}/${key}/"
-            fi
+            cat > "${RCLONE_CONFIG_FILE}" <<EOF
+[cache]
+type = s3
+provider = Other
+region = ${CACHE_REGION}
+$([ -n "${CACHE_ENDPOINT}" ] && echo "endpoint = ${CACHE_ENDPOINT}")
+EOF
             ;;
         gcs)
-            remote=":gcs:${CACHE_BUCKET}/${key}/"
+            cat > "${RCLONE_CONFIG_FILE}" <<EOF
+[cache]
+type = gcs
+EOF
             ;;
         azureblob)
-            remote=":azureblob:${CACHE_BUCKET}/${key}/"
+            cat > "${RCLONE_CONFIG_FILE}" <<EOF
+[cache]
+type = azureblob
+EOF
             ;;
         r2)
-            remote=":s3,provider=Cloudflare,endpoint=${CACHE_ENDPOINT:?Set DAGGER_CACHE_ENDPOINT for R2}:${CACHE_BUCKET}/${key}/"
+            cat > "${RCLONE_CONFIG_FILE}" <<EOF
+[cache]
+type = s3
+provider = Cloudflare
+endpoint = ${CACHE_ENDPOINT:?Set DAGGER_CACHE_ENDPOINT for R2}
+EOF
             ;;
         *)
             die "Unsupported backend: ${CACHE_BACKEND}"
             ;;
     esac
 
-    echo "${remote}"
+    log_verbose "rclone config written to ${RCLONE_CONFIG_FILE}"
+}
+
+# Build rclone remote path
+rclone_remote() {
+    local key="$1"
+    echo "cache:${CACHE_BUCKET}/${key}/"
 }
 
 # Common rclone flags (populated as a global array)
 RCLONE_FLAGS=()
 setup_rclone_flags() {
     RCLONE_FLAGS=(
+        --config "${RCLONE_CONFIG_FILE}"
         --fast-list
         --transfers 16
         --checkers 32
@@ -117,6 +138,7 @@ setup_rclone_flags() {
         RCLONE_FLAGS+=(--quiet)
     fi
 }
+setup_rclone_config
 setup_rclone_flags
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -222,15 +244,11 @@ save_cache() {
 
     # Stop engine cleanly (important for BoltDB consistency)
     log "Stopping engine for clean shutdown..."
-    docker stop "${ENGINE_NAME}" --time 30 2>/dev/null || true
+    docker stop "${ENGINE_NAME}" --timeout 30 2>/dev/null || true
 
-    # Optionally prune before saving (reduce cache size)
-    if [[ "${CACHE_PRUNE}" == "true" ]]; then
-        log_verbose "Pruning cache before save..."
-        # Engine is stopped, can't prune via API.
-        # Instead, we rely on the engine's built-in GC that ran during execution.
-        # Future: could restart engine briefly to run prune command.
-    fi
+    # Fix ownership of cache files (engine runs as root inside Docker)
+    log "Fixing cache file permissions..."
+    sudo chown -R "$(id -u):$(id -g)" "${CACHE_DIR}" 2>/dev/null || true
 
     local remote
     remote=$(rclone_remote "${CACHE_KEY}")
