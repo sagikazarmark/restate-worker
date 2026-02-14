@@ -100,6 +100,7 @@ EOF
 type = s3
 provider = Cloudflare
 endpoint = ${CACHE_ENDPOINT:?Set DAGGER_CACHE_ENDPOINT for R2}
+region = auto
 EOF
             ;;
         *)
