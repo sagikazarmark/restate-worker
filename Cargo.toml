@@ -2,7 +2,7 @@
 name = "restate-worker"
 edition = "2024"
 version = "0.0.0"
-description = ""
+description = "Cloudflare Worker handler for Restate"
 license = "MIT"
 repository = "https://github.com/sagikazarmark/restate-worker"
 homepage = "https://github.com/sagikazarmark/restate-worker"
