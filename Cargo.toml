@@ -1,7 +1,7 @@
 [package]
 name = "restate-worker"
 edition = "2024"
-version = "0.0.0"
+version = "0.1.0"
 description = "Cloudflare Worker handler for Restate"
 license = "MIT"
 repository = "https://github.com/sagikazarmark/restate-worker"
