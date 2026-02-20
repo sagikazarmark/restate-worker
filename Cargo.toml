@@ -10,7 +10,7 @@ homepage = "https://github.com/sagikazarmark/restate-worker"
 [dependencies]
 http = "1.4"
 http-body-util = "0.1"
-restate-sdk = { version = "0.8", default-features = false, features = ["http-body-util"] }
+restate-sdk = { version = "0.9", default-features = false, features = ["http-body-util"] }
 worker = { version = "0.7", features = ["http"] }
 
 [package.metadata.release]
