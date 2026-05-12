@@ -11,7 +11,7 @@ homepage = "https://github.com/sagikazarmark/restate-worker"
 http = "1.4"
 http-body-util = "0.1"
 restate-sdk = { version = "0.8", default-features = false, features = ["http-body-util"] }
-worker = { version = "0.7", features = ["http"] }
+worker = { version = "0.8", features = ["http"] }
 
 [package.metadata.release]
 sign-commit = true
